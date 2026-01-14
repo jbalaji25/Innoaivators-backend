@@ -10,6 +10,15 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        message: 'Backend is running',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Email sending endpoint
 app.post('/api/send-email', async (req, res) => {
     const {
@@ -62,11 +71,31 @@ ${message}
     };
 
     try {
-        await transporter.sendMail(mailOptions);
+        // Verify email credentials are configured
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            console.error('Email credentials not configured!');
+            console.error('EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'NOT SET');
+            console.error('EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'NOT SET');
+            return res.status(500).json({
+                message: 'Email service not configured. Please check server environment variables.'
+            });
+        }
+
+        console.log('Attempting to send email...');
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Email sent successfully:', info.messageId);
         res.status(200).json({ message: 'Email sent successfully' });
     } catch (error) {
-        console.error('Error sending email:', error);
-        res.status(500).json({ message: 'Failed to send email', error: error.toString() });
+        console.error('Error sending email:');
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Full error:', error);
+
+        res.status(500).json({
+            message: 'Failed to send email',
+            error: error.message || error.toString(),
+            details: error.code || 'Unknown error'
+        });
     }
 });
 

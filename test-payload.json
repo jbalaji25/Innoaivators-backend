@@ -1,0 +1,8 @@
+{
+    "name": "Test User",
+    "email": "test@example.com",
+    "countryCode": "+91",
+    "phone": "1234567890",
+    "subject": "General Inquiry",
+    "message": "Test message from API test"
+}
