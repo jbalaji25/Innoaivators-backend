@@ -23,8 +23,15 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Root endpoint for basic connectivity check
+app.get('/', (req, res) => {
+    console.log('Root endpoint hit');
+    res.status(200).send('Backend is running!');
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+    console.log('Health check endpoint hit');
     res.status(200).json({
         status: 'ok',
         message: 'Backend is running',
