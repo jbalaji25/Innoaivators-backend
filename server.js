@@ -104,30 +104,21 @@ ${message}
             });
         }
 
-        // FIRE-AND-FORGET: Send success response immediately
-        res.status(200).json({ message: 'Email request received. Sending in background.' });
-
-        // Send email in background
-        console.log('Attempting to send email (background)...');
-        transporter.sendMail(mailOptions)
-            .then(info => {
-                console.log('Email sent successfully:', info.messageId);
-            })
-            .catch(error => {
-                console.error('Error sending email (background):');
-                console.error('Error name:', error.name);
-                console.error('Error message:', error.message);
-            });
-
+        console.log('Attempting to send email...');
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Email sent successfully:', info.messageId);
+        res.status(200).json({ message: 'Email sent successfully' });
     } catch (error) {
-        console.error('Synchronous error:', error);
-        // Only send error response if headers haven't been sent yet
-        if (!res.headersSent) {
-            res.status(500).json({
-                message: 'Failed to process request',
-                error: error.message
-            });
-        }
+        console.error('Error sending email:');
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Full error:', error);
+
+        res.status(500).json({
+            message: 'Failed to send email',
+            error: error.message || error.toString(),
+            details: error.code || 'Unknown error'
+        });
     }
 });
 
