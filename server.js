@@ -81,6 +81,7 @@ app.post('/api/send-email', async (req, res) => {
     const mailOptions = {
         from: process.env.EMAIL_USER,
         to: 'innoaivation@gmail.com',
+        replyTo: email, // Allow replying directly to the client
         subject: `Innoaivators Contact: ${subject || 'General Inquiry'}`,
         text: `
 Name: ${name}
