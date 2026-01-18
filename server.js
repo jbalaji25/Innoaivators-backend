@@ -32,6 +32,27 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Create transporter with connection pooling
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    pool: true, // Enable connection pooling
+    maxConnections: 5,
+    maxMessages: 100,
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
+
+// Verify connection configuration
+transporter.verify(function (error, success) {
+    if (error) {
+        console.log('Transporter verification error:', error);
+    } else {
+        console.log('Server is ready to take our messages');
+    }
+});
+
 // Email sending endpoint
 app.post('/api/send-email', async (req, res) => {
     const {
@@ -41,15 +62,6 @@ app.post('/api/send-email', async (req, res) => {
     } = req.body;
 
     console.log('Received form data:', JSON.stringify(req.body, null, 2));
-
-    // Create transporter
-    const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-    });
 
     // Construct email body based on subject
     let details = '';
