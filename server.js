@@ -99,28 +99,35 @@ ${message}
         // Verify email credentials are configured
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
             console.error('Email credentials not configured!');
-            console.error('EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'NOT SET');
-            console.error('EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'NOT SET');
             return res.status(500).json({
                 message: 'Email service not configured. Please check server environment variables.'
             });
         }
 
-        console.log('Attempting to send email...');
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Email sent successfully:', info.messageId);
-        res.status(200).json({ message: 'Email sent successfully' });
-    } catch (error) {
-        console.error('Error sending email:');
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
-        console.error('Full error:', error);
+        // FIRE-AND-FORGET: Send success response immediately
+        res.status(200).json({ message: 'Email request received. Sending in background.' });
 
-        res.status(500).json({
-            message: 'Failed to send email',
-            error: error.message || error.toString(),
-            details: error.code || 'Unknown error'
-        });
+        // Send email in background
+        console.log('Attempting to send email (background)...');
+        transporter.sendMail(mailOptions)
+            .then(info => {
+                console.log('Email sent successfully:', info.messageId);
+            })
+            .catch(error => {
+                console.error('Error sending email (background):');
+                console.error('Error name:', error.name);
+                console.error('Error message:', error.message);
+            });
+
+    } catch (error) {
+        console.error('Synchronous error:', error);
+        // Only send error response if headers haven't been sent yet
+        if (!res.headersSent) {
+            res.status(500).json({
+                message: 'Failed to process request',
+                error: error.message
+            });
+        }
     }
 });
 
