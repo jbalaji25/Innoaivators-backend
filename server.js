@@ -107,7 +107,11 @@ ${message}
         console.log('Attempting to send email...');
         const info = await transporter.sendMail(mailOptions);
         console.log('Email sent successfully:', info.messageId);
-        res.status(200).json({ message: 'Email sent successfully' });
+        console.log('SMTP Response:', info.response);
+        res.status(200).json({
+            message: 'Email sent successfully',
+            info: info
+        });
     } catch (error) {
         console.error('Error sending email:');
         console.error('Error name:', error.name);
