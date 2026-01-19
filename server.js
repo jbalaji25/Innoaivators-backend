@@ -34,7 +34,9 @@ app.get('/api/health', (req, res) => {
 
 // Create transporter with connection pooling
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // use STARTTLS
     pool: true, // Enable connection pooling
     maxConnections: 5,
     maxMessages: 100,
