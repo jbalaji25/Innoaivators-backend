@@ -1,6 +1,8 @@
 const express = require('express');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -38,9 +40,6 @@ const transporter = nodemailer.createTransport({
     port: 587,
     secure: false, // use STARTTLS
     family: 4, // Force IPv4 to prevent timeouts
-    pool: true, // Enable connection pooling
-    maxConnections: 5,
-    maxMessages: 100,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
@@ -115,16 +114,25 @@ ${message}
 
     // Send email asynchronously
     console.log('Attempting to send email in background...');
+
+    const logFile = path.join(__dirname, 'email.log');
+    const log = (msg) => {
+        const timestamp = new Date().toISOString();
+        fs.appendFileSync(logFile, `[${timestamp}] ${msg}\n`);
+    };
+
     transporter.sendMail(mailOptions)
         .then(info => {
             console.log('Email sent successfully:', info.messageId);
             console.log('SMTP Response:', info.response);
+            log(`SUCCESS: Email sent to ${email} (MessageID: ${info.messageId})`);
         })
         .catch(error => {
             console.error('Error sending email (Background):');
             console.error('Error name:', error.name);
             console.error('Error message:', error.message);
             console.error('Full error:', error);
+            log(`ERROR: Failed to send to ${email}. Error: ${error.message}`);
         });
 });
 
