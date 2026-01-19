@@ -136,6 +136,55 @@ ${message}
         });
 });
 
+// Debug endpoint to verify email configuration synchronously
+app.get('/api/debug-email', async (req, res) => {
+    console.log('Debug email endpoint hit');
+
+    const debugInfo = {
+        envUserSet: !!process.env.EMAIL_USER,
+        envPassSet: !!process.env.EMAIL_PASS,
+        nodeEnv: process.env.NODE_ENV,
+        port: process.env.PORT
+    };
+
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        return res.status(500).json({
+            status: 'error',
+            message: 'Environment variables missing',
+            debugInfo
+        });
+    }
+
+    try {
+        console.log('Verifying transporter...');
+        await transporter.verify();
+
+        console.log('Sending debug email...');
+        const info = await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: 'innoaivation@gmail.com',
+            subject: 'Debug Email Test',
+            text: 'This is a synchronous debug email to verify deployment configuration.',
+        });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Email sent successfully',
+            messageId: info.messageId,
+            debugInfo
+        });
+    } catch (error) {
+        console.error('Debug email failed:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to send email',
+            error: error.message,
+            code: error.code,
+            debugInfo
+        });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
