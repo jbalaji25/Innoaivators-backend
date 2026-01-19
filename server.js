@@ -37,6 +37,7 @@ const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
     secure: false, // use STARTTLS
+    family: 4, // Force IPv4 to prevent timeouts
     pool: true, // Enable connection pooling
     maxConnections: 5,
     maxMessages: 100,
@@ -56,7 +57,7 @@ transporter.verify(function (error, success) {
 });
 
 // Email sending endpoint
-app.post('/api/send-email', async (req, res) => {
+app.post('/api/send-email', (req, res) => {
     const {
         name, email, countryCode, phone, subject, areaOfInterest,
         companyName, role, yearStarted, interestedArea,
@@ -64,6 +65,20 @@ app.post('/api/send-email', async (req, res) => {
     } = req.body;
 
     console.log('Received form data:', JSON.stringify(req.body, null, 2));
+
+    // Verify email credentials are configured
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        console.error('Email credentials not configured!');
+        return res.status(500).json({
+            message: 'Email service not configured. Please check server environment variables.'
+        });
+    }
+
+    // FIRE-AND-FORGET: Respond immediately to the frontend
+    res.status(200).json({
+        message: 'Email sending initiated successfully',
+        info: { messageId: 'queued-for-delivery' }
+    });
 
     // Construct email body based on subject
     let details = '';
@@ -98,35 +113,19 @@ ${message}
     `,
     };
 
-    try {
-        // Verify email credentials are configured
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.error('Email credentials not configured!');
-            return res.status(500).json({
-                message: 'Email service not configured. Please check server environment variables.'
-            });
-        }
-
-        console.log('Attempting to send email...');
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Email sent successfully:', info.messageId);
-        console.log('SMTP Response:', info.response);
-        res.status(200).json({
-            message: 'Email sent successfully',
-            info: info
+    // Send email asynchronously
+    console.log('Attempting to send email in background...');
+    transporter.sendMail(mailOptions)
+        .then(info => {
+            console.log('Email sent successfully:', info.messageId);
+            console.log('SMTP Response:', info.response);
+        })
+        .catch(error => {
+            console.error('Error sending email (Background):');
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Full error:', error);
         });
-    } catch (error) {
-        console.error('Error sending email:');
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
-        console.error('Full error:', error);
-
-        res.status(500).json({
-            message: 'Failed to send email',
-            error: error.message || error.toString(),
-            details: error.code || 'Unknown error'
-        });
-    }
 });
 
 app.listen(PORT, () => {
