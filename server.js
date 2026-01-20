@@ -34,12 +34,9 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Create transporter with connection pooling
+// Create transporter with service: 'gmail' for better reliability in deployment
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // use SSL
-    family: 4, // Force IPv4 to prevent timeouts
+    service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
@@ -144,20 +141,27 @@ app.get('/api/debug-email', async (req, res) => {
         envUserSet: !!process.env.EMAIL_USER,
         envPassSet: !!process.env.EMAIL_PASS,
         nodeEnv: process.env.NODE_ENV,
-        port: process.env.PORT
+        port: process.env.PORT,
+        emailUser: process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 3)}...` : 'not set'
     };
 
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
         return res.status(500).json({
             status: 'error',
-            message: 'Environment variables missing',
+            message: 'Environment variables missing in Render',
             debugInfo
         });
     }
 
     try {
         console.log('Verifying transporter...');
-        await transporter.verify();
+        // Add a timeout to the verification to prevent 502s
+        const verifyPromise = transporter.verify();
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Transporter verification timed out')), 10000)
+        );
+
+        await Promise.race([verifyPromise, timeoutPromise]);
 
         console.log('Sending debug email...');
         const info = await transporter.sendMail({
