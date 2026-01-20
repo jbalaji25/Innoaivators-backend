@@ -34,17 +34,17 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Create transporter with explicit host/port and logging
+// Create transporter with service: 'gmail' and explicit timeouts
 let smtpLogs = [];
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // use STARTTLS
-    pool: true, // Use connection pooling
+    service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
+    connectionTimeout: 15000, // 15 seconds
+    greetingTimeout: 15000,
+    socketTimeout: 15000,
     logger: {
         info: (msg) => {
             const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
@@ -185,7 +185,7 @@ app.get('/api/debug-email', async (req, res) => {
         // Add a longer timeout to the verification to prevent 502s
         const verifyPromise = transporter.verify();
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Transporter verification timed out')), 25000)
+            setTimeout(() => reject(new Error('Transporter verification timed out')), 30000)
         );
 
         await Promise.race([verifyPromise, timeoutPromise]);
