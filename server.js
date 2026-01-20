@@ -40,15 +40,31 @@ const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
     secure: false, // use STARTTLS
+    pool: true, // Use connection pooling
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
     logger: {
-        info: (msg) => { smtpLogs.push(`[INFO] ${msg}`); console.log(msg); },
-        warn: (msg) => { smtpLogs.push(`[WARN] ${msg}`); console.warn(msg); },
-        error: (msg) => { smtpLogs.push(`[ERROR] ${msg}`); console.error(msg); },
-        debug: (msg) => { smtpLogs.push(`[DEBUG] ${msg}`); },
+        info: (msg) => {
+            const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
+            smtpLogs.push(`[INFO] ${formatted}`);
+            console.log(msg);
+        },
+        warn: (msg) => {
+            const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
+            smtpLogs.push(`[WARN] ${formatted}`);
+            console.warn(msg);
+        },
+        error: (msg) => {
+            const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
+            smtpLogs.push(`[ERROR] ${formatted}`);
+            console.error(msg);
+        },
+        debug: (msg) => {
+            const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
+            smtpLogs.push(`[DEBUG] ${formatted}`);
+        },
     },
     debug: true
 });
@@ -169,7 +185,7 @@ app.get('/api/debug-email', async (req, res) => {
         // Add a longer timeout to the verification to prevent 502s
         const verifyPromise = transporter.verify();
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Transporter verification timed out')), 20000)
+            setTimeout(() => reject(new Error('Transporter verification timed out')), 25000)
         );
 
         await Promise.race([verifyPromise, timeoutPromise]);
