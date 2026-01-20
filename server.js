@@ -1,13 +1,15 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const net = require('net');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+
+// Initialize Resend
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // Middleware
 app.use(cors({
@@ -34,55 +36,8 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Create transporter with Gmail SMTP (App Password)
-let smtpLogs = [];
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // use SSL/TLS
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-    connectionTimeout: 30000, // 30 seconds
-    greetingTimeout: 30000,
-    socketTimeout: 30000,
-    family: 4, // Force IPv4
-    logger: {
-        info: (msg) => {
-            const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
-            smtpLogs.push(`[INFO] ${formatted}`);
-            console.log(msg);
-        },
-        warn: (msg) => {
-            const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
-            smtpLogs.push(`[WARN] ${formatted}`);
-            console.warn(msg);
-        },
-        error: (msg) => {
-            const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
-            smtpLogs.push(`[ERROR] ${formatted}`);
-            console.error(msg);
-        },
-        debug: (msg) => {
-            const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
-            smtpLogs.push(`[DEBUG] ${formatted}`);
-        },
-    },
-    debug: true
-});
-
-// Verify connection configuration
-transporter.verify(function (error, success) {
-    if (error) {
-        console.log('Transporter verification error:', error);
-    } else {
-        console.log('Server is ready to take our messages');
-    }
-});
-
 // Email sending endpoint
-app.post('/api/send-email', (req, res) => {
+app.post('/api/send-email', async (req, res) => {
     const {
         name, email, countryCode, phone, subject, areaOfInterest,
         companyName, role, yearStarted, interestedArea,
@@ -91,11 +46,11 @@ app.post('/api/send-email', (req, res) => {
 
     console.log('Received form data:', JSON.stringify(req.body, null, 2));
 
-    // Verify email credentials are configured
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-        console.error('Email credentials not configured!');
+    // Verify Resend is configured
+    if (!resend) {
+        console.error('RESEND_API_KEY not configured!');
         return res.status(500).json({
-            message: 'Email service not configured. Please check server environment variables.'
+            message: 'Email service (Resend) not configured. Please check server environment variables.'
         });
     }
 
@@ -120,10 +75,10 @@ app.post('/api/send-email', (req, res) => {
     }
 
     // Email content
-    const mailOptions = {
-        from: process.env.EMAIL_USER,
+    const emailOptions = {
+        from: 'Innoaivators <onboarding@resend.dev>', // Use verified domain or onboarding email
         to: 'innoaivation@gmail.com',
-        replyTo: email, // Allow replying directly to the client
+        reply_to: email,
         subject: `Innoaivators Contact: ${subject || 'General Inquiry'}`,
         text: `
 Name: ${name}
@@ -139,7 +94,7 @@ ${message}
     };
 
     // Send email asynchronously
-    console.log('Attempting to send email in background...');
+    console.log('Attempting to send email via Resend...');
 
     const logFile = path.join(__dirname, 'email.log');
     const log = (msg) => {
@@ -147,103 +102,71 @@ ${message}
         fs.appendFileSync(logFile, `[${timestamp}] ${msg}\n`);
     };
 
-    transporter.sendMail(mailOptions)
-        .then(info => {
-            console.log('Email sent successfully:', info.messageId);
-            console.log('SMTP Response:', info.response);
-            log(`SUCCESS: Email sent to ${email} (MessageID: ${info.messageId})`);
-        })
-        .catch(error => {
-            console.error('Error sending email (Background):');
-            console.error('Error name:', error.name);
-            console.error('Error message:', error.message);
-            console.error('Full error:', error);
+    try {
+        const { data, error } = await resend.emails.send(emailOptions);
+        if (error) {
+            console.error('Resend Error:', error);
             log(`ERROR: Failed to send to ${email}. Error: ${error.message}`);
-        });
+        } else {
+            console.log('Email sent successfully via Resend:', data.id);
+            log(`SUCCESS: Email sent to ${email} (Resend ID: ${data.id})`);
+        }
+    } catch (error) {
+        console.error('Error sending email (Resend Exception):', error);
+        log(`ERROR: Failed to send to ${email}. Exception: ${error.message}`);
+    }
 });
 
-// Debug endpoint to verify email configuration synchronously
+// Debug endpoint to verify Resend configuration
 app.get('/api/debug-email', async (req, res) => {
     console.log('Debug email endpoint hit');
-    smtpLogs = []; // Clear logs for this request
 
     const debugInfo = {
-        envUserSet: !!process.env.EMAIL_USER,
-        envPassSet: !!process.env.EMAIL_PASS,
+        envApiKeySet: !!process.env.RESEND_API_KEY,
         nodeEnv: process.env.NODE_ENV,
         port: process.env.PORT,
-        emailUser: process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 3)}...` : 'not set'
+        apiKeyPrefix: process.env.RESEND_API_KEY ? `${process.env.RESEND_API_KEY.substring(0, 5)}...` : 'not set'
     };
 
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    if (!resend) {
         return res.status(500).json({
             status: 'error',
-            message: 'Environment variables missing in Render',
+            message: 'RESEND_API_KEY missing in Render',
             debugInfo
         });
     }
 
-    // Raw TCP Test to check if Render is blocking the port
-    const tcpTest = await new Promise((resolve) => {
-        const socket = new net.Socket();
-        const start = Date.now();
-        socket.setTimeout(10000);
-
-        socket.on('connect', () => {
-            const duration = Date.now() - start;
-            socket.destroy();
-            resolve({ status: 'success', message: 'TCP Connection successful', duration: `${duration}ms` });
-        });
-
-        socket.on('timeout', () => {
-            socket.destroy();
-            resolve({ status: 'error', message: 'TCP Connection timed out (10s). This confirms Render is blocking Port 465.' });
-        });
-
-        socket.on('error', (err) => {
-            socket.destroy();
-            resolve({ status: 'error', message: `TCP Connection failed: ${err.message}`, code: err.code });
-        });
-
-        socket.connect(465, 'smtp.gmail.com');
-    });
-
     try {
-        console.log('Verifying transporter...');
-        // Add a longer timeout to the verification to prevent 502s
-        const verifyPromise = transporter.verify();
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Transporter verification timed out')), 35000)
-        );
-
-        await Promise.race([verifyPromise, timeoutPromise]);
-
-        console.log('Sending debug email...');
-        const info = await transporter.sendMail({
-            from: process.env.EMAIL_USER,
+        console.log('Sending debug email via Resend...');
+        const { data, error } = await resend.emails.send({
+            from: 'Innoaivators Debug <onboarding@resend.dev>',
             to: 'innoaivation@gmail.com',
-            subject: 'Debug Email Test',
-            text: 'This is a synchronous debug email to verify deployment configuration.',
+            subject: 'Resend Debug Email Test',
+            text: 'This is a synchronous debug email to verify Resend configuration on Render.',
         });
+
+        if (error) {
+            return res.status(500).json({
+                status: 'error',
+                message: 'Resend API returned an error',
+                error,
+                debugInfo
+            });
+        }
 
         res.status(200).json({
             status: 'success',
-            message: 'Email sent successfully',
-            messageId: info.messageId,
-            debugInfo,
-            tcpTest,
-            logs: smtpLogs
+            message: 'Email sent successfully via Resend',
+            id: data.id,
+            debugInfo
         });
     } catch (error) {
-        console.error('Debug email failed:', error);
+        console.error('Resend debug email failed:', error);
         res.status(500).json({
             status: 'error',
-            message: 'Failed to send email',
+            message: 'Failed to send email via Resend',
             error: error.message,
-            code: error.code,
-            debugInfo,
-            tcpTest,
-            logs: smtpLogs
+            debugInfo
         });
     }
 });
