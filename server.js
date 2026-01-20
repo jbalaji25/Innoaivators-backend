@@ -34,13 +34,23 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Create transporter with service: 'gmail' for better reliability in deployment
+// Create transporter with explicit host/port and logging
+let smtpLogs = [];
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // use STARTTLS
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
+    logger: {
+        info: (msg) => { smtpLogs.push(`[INFO] ${msg}`); console.log(msg); },
+        warn: (msg) => { smtpLogs.push(`[WARN] ${msg}`); console.warn(msg); },
+        error: (msg) => { smtpLogs.push(`[ERROR] ${msg}`); console.error(msg); },
+        debug: (msg) => { smtpLogs.push(`[DEBUG] ${msg}`); },
+    },
+    debug: true
 });
 
 // Verify connection configuration
@@ -136,6 +146,7 @@ ${message}
 // Debug endpoint to verify email configuration synchronously
 app.get('/api/debug-email', async (req, res) => {
     console.log('Debug email endpoint hit');
+    smtpLogs = []; // Clear logs for this request
 
     const debugInfo = {
         envUserSet: !!process.env.EMAIL_USER,
@@ -155,10 +166,10 @@ app.get('/api/debug-email', async (req, res) => {
 
     try {
         console.log('Verifying transporter...');
-        // Add a timeout to the verification to prevent 502s
+        // Add a longer timeout to the verification to prevent 502s
         const verifyPromise = transporter.verify();
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Transporter verification timed out')), 10000)
+            setTimeout(() => reject(new Error('Transporter verification timed out')), 20000)
         );
 
         await Promise.race([verifyPromise, timeoutPromise]);
@@ -175,7 +186,8 @@ app.get('/api/debug-email', async (req, res) => {
             status: 'success',
             message: 'Email sent successfully',
             messageId: info.messageId,
-            debugInfo
+            debugInfo,
+            logs: smtpLogs
         });
     } catch (error) {
         console.error('Debug email failed:', error);
@@ -184,7 +196,8 @@ app.get('/api/debug-email', async (req, res) => {
             message: 'Failed to send email',
             error: error.message,
             code: error.code,
-            debugInfo
+            debugInfo,
+            logs: smtpLogs
         });
     }
 });
