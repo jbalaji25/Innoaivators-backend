@@ -3,6 +3,7 @@ const nodemailer = require('nodemailer');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
 require('dotenv').config();
 
 const app = express();
@@ -33,10 +34,10 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Create transporter with Port 465 and IPv4 forcing
+// Create transporter with smtp.googlemail.com and TLS tweaks
 let smtpLogs = [];
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
+    host: 'smtp.googlemail.com',
     port: 465,
     secure: true, // use SSL/TLS
     auth: {
@@ -47,6 +48,10 @@ const transporter = nodemailer.createTransport({
     greetingTimeout: 30000,
     socketTimeout: 30000,
     family: 4, // Force IPv4
+    tls: {
+        rejectUnauthorized: false,
+        servername: 'smtp.googlemail.com'
+    },
     logger: {
         info: (msg) => {
             const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
@@ -182,6 +187,31 @@ app.get('/api/debug-email', async (req, res) => {
         });
     }
 
+    // Raw TCP Test
+    const tcpTest = await new Promise((resolve) => {
+        const socket = new net.Socket();
+        const start = Date.now();
+        socket.setTimeout(10000);
+
+        socket.on('connect', () => {
+            const duration = Date.now() - start;
+            socket.destroy();
+            resolve({ status: 'success', message: 'TCP Connection successful', duration: `${duration}ms` });
+        });
+
+        socket.on('timeout', () => {
+            socket.destroy();
+            resolve({ status: 'error', message: 'TCP Connection timed out (10s)' });
+        });
+
+        socket.on('error', (err) => {
+            socket.destroy();
+            resolve({ status: 'error', message: `TCP Connection failed: ${err.message}`, code: err.code });
+        });
+
+        socket.connect(465, 'smtp.googlemail.com');
+    });
+
     try {
         console.log('Verifying transporter...');
         // Add a longer timeout to the verification to prevent 502s
@@ -205,6 +235,7 @@ app.get('/api/debug-email', async (req, res) => {
             message: 'Email sent successfully',
             messageId: info.messageId,
             debugInfo,
+            tcpTest,
             logs: smtpLogs
         });
     } catch (error) {
@@ -215,6 +246,7 @@ app.get('/api/debug-email', async (req, res) => {
             error: error.message,
             code: error.code,
             debugInfo,
+            tcpTest,
             logs: smtpLogs
         });
     }
