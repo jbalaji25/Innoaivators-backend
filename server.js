@@ -34,10 +34,10 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Create transporter with smtp.googlemail.com and TLS tweaks
+// Create transporter with Gmail SMTP (App Password)
 let smtpLogs = [];
 const transporter = nodemailer.createTransport({
-    host: 'smtp.googlemail.com',
+    host: 'smtp.gmail.com',
     port: 465,
     secure: true, // use SSL/TLS
     auth: {
@@ -48,10 +48,6 @@ const transporter = nodemailer.createTransport({
     greetingTimeout: 30000,
     socketTimeout: 30000,
     family: 4, // Force IPv4
-    tls: {
-        rejectUnauthorized: false,
-        servername: 'smtp.googlemail.com'
-    },
     logger: {
         info: (msg) => {
             const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
@@ -187,7 +183,7 @@ app.get('/api/debug-email', async (req, res) => {
         });
     }
 
-    // Raw TCP Test
+    // Raw TCP Test to check if Render is blocking the port
     const tcpTest = await new Promise((resolve) => {
         const socket = new net.Socket();
         const start = Date.now();
@@ -201,7 +197,7 @@ app.get('/api/debug-email', async (req, res) => {
 
         socket.on('timeout', () => {
             socket.destroy();
-            resolve({ status: 'error', message: 'TCP Connection timed out (10s)' });
+            resolve({ status: 'error', message: 'TCP Connection timed out (10s). This confirms Render is blocking Port 465.' });
         });
 
         socket.on('error', (err) => {
@@ -209,7 +205,7 @@ app.get('/api/debug-email', async (req, res) => {
             resolve({ status: 'error', message: `TCP Connection failed: ${err.message}`, code: err.code });
         });
 
-        socket.connect(465, 'smtp.googlemail.com');
+        socket.connect(465, 'smtp.gmail.com');
     });
 
     try {
