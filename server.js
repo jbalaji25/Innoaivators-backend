@@ -9,7 +9,6 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // Middleware
-// Middleware
 app.use(cors({
     origin: '*', // Allow all origins for debugging
     methods: ['GET', 'POST', 'OPTIONS'],
@@ -34,17 +33,20 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Create transporter with service: 'gmail' and explicit timeouts
+// Create transporter with Port 465 and IPv4 forcing
 let smtpLogs = [];
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // use SSL/TLS
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
-    connectionTimeout: 15000, // 15 seconds
-    greetingTimeout: 15000,
-    socketTimeout: 15000,
+    connectionTimeout: 30000, // 30 seconds
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+    family: 4, // Force IPv4
     logger: {
         info: (msg) => {
             const formatted = typeof msg === 'object' ? JSON.stringify(msg) : msg;
@@ -185,7 +187,7 @@ app.get('/api/debug-email', async (req, res) => {
         // Add a longer timeout to the verification to prevent 502s
         const verifyPromise = transporter.verify();
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Transporter verification timed out')), 30000)
+            setTimeout(() => reject(new Error('Transporter verification timed out')), 35000)
         );
 
         await Promise.race([verifyPromise, timeoutPromise]);
